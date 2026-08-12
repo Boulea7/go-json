@@ -2730,6 +2730,35 @@ func TestIssue459(t *testing.T) {
 	assertEq(t, "unexpected result", "{}", string(b))
 }
 
+type issue503IgnoredBackReferenceRoot struct {
+	Child *issue503IgnoredBackReferenceChild `json:"child,omitempty"`
+}
+
+type issue503IgnoredBackReferenceChild struct {
+	Root  *issue503IgnoredBackReferenceRoot `json:"-"`
+	First *int                              `json:"first,omitempty"`
+	Value *string                           `json:"value,omitempty"`
+}
+
+type issue503UnexportedBackReferenceRoot struct {
+	Child *issue503UnexportedBackReferenceChild `json:"child,omitempty"`
+}
+
+type issue503UnexportedBackReferenceChild struct {
+	root  *issue503UnexportedBackReferenceRoot
+	First *int    `json:"first,omitempty"`
+	Value *string `json:"value,omitempty"`
+}
+
+type issue503RecursiveRoot struct {
+	Child *issue503RecursiveChild `json:"child,omitempty"`
+}
+
+type issue503RecursiveChild struct {
+	Root  *issue503RecursiveRoot `json:"root,omitempty"`
+	Value string                 `json:"value,omitempty"`
+}
+
 func TestIssue503(t *testing.T) {
 	type Child struct {
 		First int    `json:"first"`
@@ -2774,9 +2803,28 @@ func TestIssue503(t *testing.T) {
 	type NestedWithTailRoot struct {
 		Nested *NestedWithTail `json:"nested,omitempty"`
 	}
+	type PointerFieldChild struct {
+		First *int    `json:"first,omitempty"`
+		Value *string `json:"value,omitempty"`
+	}
+	type PointerFieldRoot struct {
+		Child *PointerFieldChild `json:"child,omitempty"`
+	}
+	type DoublePointerFieldRoot struct {
+		Child **PointerFieldChild `json:"child,omitempty"`
+	}
+	type IgnoredMarkerRoot struct {
+		Marker struct{}           `json:"-"`
+		Child  *PointerFieldChild `json:"child,omitempty"`
+	}
+	type SelfRecursiveRoot struct {
+		Next *SelfRecursiveRoot `json:"next,omitempty"`
+	}
 
 	var nilChild *Child
 	child := &Child{}
+	pointerValue := "present"
+	pointerFieldChild := &PointerFieldChild{Value: &pointerValue}
 	tests := []struct {
 		name  string
 		value interface{}
@@ -2840,6 +2888,34 @@ func TestIssue503(t *testing.T) {
 		{
 			name:  "nested nil pointer",
 			value: NestedRoot{},
+		},
+		{
+			name:  "direct pointer with pointer fields",
+			value: PointerFieldRoot{Child: pointerFieldChild},
+		},
+		{
+			name:  "direct double pointer with pointer fields",
+			value: DoublePointerFieldRoot{Child: &pointerFieldChild},
+		},
+		{
+			name:  "direct pointer after ignored zero-size marker",
+			value: IgnoredMarkerRoot{Child: pointerFieldChild},
+		},
+		{
+			name:  "direct pointer with ignored tagged back reference",
+			value: issue503IgnoredBackReferenceRoot{Child: &issue503IgnoredBackReferenceChild{Value: &pointerValue}},
+		},
+		{
+			name:  "direct pointer with unexported back reference",
+			value: issue503UnexportedBackReferenceRoot{Child: &issue503UnexportedBackReferenceChild{Value: &pointerValue}},
+		},
+		{
+			name:  "visible recursive back reference",
+			value: issue503RecursiveRoot{Child: &issue503RecursiveChild{Value: "present"}},
+		},
+		{
+			name:  "self-recursive root",
+			value: SelfRecursiveRoot{Next: &SelfRecursiveRoot{}},
 		},
 	}
 
